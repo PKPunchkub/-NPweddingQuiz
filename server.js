@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -6,13 +5,18 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Game configuration
-const ADMIN_PASSWORD = '689';
+const ADMIN_PASSWORD = 'namkhing2024';
 const MAX_PLAYERS = 250;
 const QUESTION_TIME = 10; // seconds
 
@@ -69,6 +73,71 @@ function calculateScore(timeLeft, totalTime = QUESTION_TIME) {
     return baseScore + timeBonus;
 }
 
+// Function to get the correct host URL for cloud deployment
+function getHostUrl(socket) {
+    // Try to get from environment variable first (highest priority)
+    if (process.env.GAME_URL) {
+        return process.env.GAME_URL;
+    }
+    
+    // Get from request headers
+    const headers = socket.handshake.headers;
+    const host = headers.host;
+    
+    // Determine protocol based on various indicators
+    let protocol = 'http';
+    
+    // Check for forwarded protocol (from reverse proxy/load balancer)
+    if (headers['x-forwarded-proto']) {
+        protocol = headers['x-forwarded-proto'];
+    } 
+    // Check for SSL forwarding
+    else if (headers['x-forwarded-ssl'] === 'on') {
+        protocol = 'https';
+    }
+    // Check if running in production environment
+    else if (process.env.NODE_ENV === 'production') {
+        protocol = 'https';
+    }
+    // Check for common cloud hosting platforms
+    else if (host && (
+        host.includes('herokuapp.com') || 
+        host.includes('railway.app') || 
+        host.includes('vercel.app') || 
+        host.includes('netlify.app') ||
+        host.includes('render.com') ||
+        host.includes('fly.io') ||
+        host.includes('glitch.me')
+    )) {
+        protocol = 'https';
+    }
+    
+    if (host) {
+        const gameUrl = `${protocol}://${host}`;
+        console.log(`Generated game URL: ${gameUrl}`);
+        return gameUrl;
+    }
+    
+    // Fallback to localhost (for local development only)
+    console.log('Falling back to localhost - this will not work for mobile devices over internet');
+    return 'http://localhost:3000';
+}
+
+// Health check endpoint for cloud platforms
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'OK', 
+        timestamp: new Date().toISOString(),
+        rooms: rooms.size,
+        onlineUsers: onlineUsers
+    });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
@@ -83,7 +152,8 @@ io.on('connection', (socket) => {
         
         if (data.password === ADMIN_PASSWORD) {
             const roomId = generateRoomId();
-            const gameUrl = `${process.env.GAME_URL || 'http://localhost:3000'}?join=true&room=${roomId}`;
+            const hostUrl = getHostUrl(socket);
+            const gameUrl = `${hostUrl}?join=true&room=${roomId}`;
             
             // Create new room
             rooms.set(roomId, {
@@ -102,6 +172,7 @@ io.on('connection', (socket) => {
             });
             
             console.log('Host authenticated, room created:', roomId);
+            console.log('Game URL generated:', gameUrl);
         } else {
             socket.emit('host-auth-failed', { message: 'Invalid password' });
         }
@@ -445,11 +516,12 @@ function endGame(roomId) {
 
 // Start server
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`🎮 Wedding Game Server running on port ${PORT}`);
     console.log(`🔐 Admin password: ${ADMIN_PASSWORD}`);
     console.log(`👥 Max players per room: ${MAX_PLAYERS}`);
     console.log(`⏱️  Question time: ${QUESTION_TIME} seconds`);
+    console.log(`🌐 Server listening on all interfaces (0.0.0.0:${PORT})`);
 });
 
 // Graceful shutdown
