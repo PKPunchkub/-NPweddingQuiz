@@ -16,7 +16,7 @@ const io = socketIo(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Game configuration
-const ADMIN_PASSWORD = 'namkhing2024';
+const ADMIN_PASSWORD = '689';
 const MAX_PLAYERS = 250;
 const QUESTION_TIME = 10; // seconds
 
@@ -25,7 +25,7 @@ const questions = [
     {
         question: "น้ำขิงชอบสีอะไรมากที่สุด? (What is Namkhing's favorite color?)",
         answers: ["สีชมพู (Pink)", "สีฟ้า (Blue)", "สีเขียว (Green)", "สีม่วง (Purple)"],
-        correct: 3
+        correct: 1
     },
     {
         question: "พันช์ชอบกินอาหารประเภทไหนมากที่สุด? (What type of food does Punch like most?)",
@@ -35,7 +35,7 @@ const questions = [
     {
         question: "น้ำขิงและพันช์รู้จักกันที่ไหน? (Where did Namkhing and Punch meet?)",
         answers: ["ที่ทำงาน (At work)", "ที่มหาวิทยาลัย (At university)", "ผ่านเพื่อน (Through friends)", "แอปหาคู่ (Dating app)"],
-        correct: 1
+        correct: 0
     },
     {
         question: "งานอดิเรกที่ทั้งคู่ชอบทำร่วมกันคืออะไร? (What hobby do they both enjoy together?)",
@@ -67,9 +67,9 @@ function getRandomCharacter() {
 
 function calculateScore(timeLeft, totalTime = QUESTION_TIME) {
     // Base score for correct answer
-    const baseScore = 100;
+    const baseScore = 10;
     // Time bonus (up to 50 points for answering quickly)
-    const timeBonus = Math.floor((timeLeft / totalTime) * 50);
+    const timeBonus = Math.floor((timeLeft / totalTime) * 5);
     return baseScore + timeBonus;
 }
 
