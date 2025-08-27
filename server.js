@@ -1,4 +1,4 @@
-const express = require('express');
+0const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
@@ -25,7 +25,7 @@ const questions = [
     {
         question: "น้ำขิงชอบสีอะไรมากที่สุด? (What is Namkhing's favorite color?)",
         answers: ["สีชมพู (Pink)", "สีฟ้า (Blue)", "สีเขียว (Green)", "สีม่วง (Purple)"],
-        correct: 1
+        correct: 0
     },
     {
         question: "พันช์ชอบกินอาหารประเภทไหนมากที่สุด? (What type of food does Punch like most?)",
@@ -44,7 +44,7 @@ const questions = [
     },
     {
         question: "พันช์ขอน้ำขิงแต่งงานที่ไหน? (Where did Punch propose to Namkhing?)",
-        answers: ["ที่บ้าน (At home)", "ร้านอาหาร (Restaurant)", "ชายหาด (Beach)", "สวนสาธารณะ (Park)"],
+        answers: ["ที่บ้าน (At home)", "ร้านอาหาร (Restaurant)", "ต่างประเทศ (Foreign country)", "สวนสาธารณะ (Park)"],
         correct: 2
     }
 ];
@@ -67,8 +67,8 @@ function getRandomCharacter() {
 
 function calculateScore(timeLeft, totalTime = QUESTION_TIME) {
     // Base score for correct answer
-    const baseScore = 10;
-    // Time bonus (up to 50 points for answering quickly)
+    const baseScore = 1;
+    // Time bonus (up to 5 points for answering quickly)
     const timeBonus = Math.floor((timeLeft / totalTime) * 5);
     return baseScore + timeBonus;
 }
