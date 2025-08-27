@@ -67,7 +67,7 @@ function getRandomCharacter() {
 
 function calculateScore(timeLeft, totalTime = QUESTION_TIME) {
     // Base score for correct answer
-    const baseScore = 1;
+    const baseScore = 10;
     // Time bonus (up to 5 points for answering quickly)
     const timeBonus = Math.floor((timeLeft / totalTime) * 5);
     return baseScore + timeBonus;
