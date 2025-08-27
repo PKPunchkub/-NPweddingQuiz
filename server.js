@@ -2,224 +2,146 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const cors = require('cors');
 const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
-});
+const io = socketIo(server);
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Game state
-let gameRooms = new Map();
-let activeRoomId = null;
-
 // Game configuration
-const ADMIN_PASSWORD = '689';
+const ADMIN_PASSWORD = 'namkhing2024';
 const MAX_PLAYERS = 250;
 const QUESTION_TIME = 10; // seconds
 
-// Questions data
+// Game questions
 const questions = [
     {
-        question: "เจ้าบ่าวเจ้าสาวพบกันครั้งแรกที่ไหน? (Where did the bride and groom first meet?)",
-        answers: ["มหาวิทยาลัย (University)", "ที่ทำงาน (At work)", "งานเพื่อน (Friend's party)", "แอปหาคู่ (Dating app)"],
-        correct: 1
+        question: "น้ำขิงชอบสีอะไรมากที่สุด? (What is Namkhing's favorite color?)",
+        answers: ["สีชมพู (Pink)", "สีฟ้า (Blue)", "สีเขียว (Green)", "สีม่วง (Purple)"],
+        correct: 3
     },
     {
-        question: "เจ้าสาวชอบสีอะไรมากที่สุด? (What is the bride's favorite color?)",
-        answers: ["ชมพู (Pink)", "ฟ้า (Blue)", "เขียว (Green)", "ม่วง (Purple)"],
+        question: "พันช์ชอบกินอาหารประเภทไหนมากที่สุด? (What type of food does Punch like most?)",
+        answers: ["อาหารญี่ปุ่น (Japanese)", "อาหารอิตาเลียน (Italian)", "อาหารไทย (Thai)", "อาหารเกาหลี (Korean)"],
         correct: 0
     },
     {
-        question: "เจ้าบ่าวขอแต่งงานที่ไหน? (Where did the groom propose?)",
-        answers: ["ร้านอาหาร (Restaurant)", "ชายหาด (Beach)", "บ้าน (Home)", "สวนสาธารณะ (Park)"],
+        question: "น้ำขิงและพันช์รู้จักกันที่ไหน? (Where did Namkhing and Punch meet?)",
+        answers: ["ที่ทำงาน (At work)", "ที่มหาวิทยาลัย (At university)", "ผ่านเพื่อน (Through friends)", "แอปหาคู่ (Dating app)"],
         correct: 1
     },
     {
-        question: "คู่บ่าวสาวชอบทำอะไรร่วมกันมากที่สุด? (What do the couple enjoy doing together most?)",
-        answers: ["ดูหนัง (Watching movies)", "ทำอาหาร (Cooking)", "เที่ยว (Traveling)", "เล่นเกม (Playing games)"],
+        question: "งานอดิเรกที่ทั้งคู่ชอบทำร่วมกันคืออะไร? (What hobby do they both enjoy together?)",
+        answers: ["ดูหนัง (Watching movies)", "ทำอาหาร (Cooking)", "เดินทาง (Traveling)", "เล่นเกม (Playing games)"],
         correct: 2
     },
     {
-        question: "เจ้าบ่าวเจ้าสาวมีความฝันร่วมกันคืออะไร? (What is the couple's shared dream?)",
-        answers: ["เปิดร้านอาหาร (Open a restaurant)", "เที่ยวรอบโลก (Travel around the world)", "มีบ้านหลังใหญ่ (Have a big house)", "เลี้ยงสุนัข (Raise dogs)"],
-        correct: 1
+        question: "พันช์ขอน้ำขิงแต่งงานที่ไหน? (Where did Punch propose to Namkhing?)",
+        answers: ["ที่บ้าน (At home)", "ร้านอาหาร (Restaurant)", "ชายหาด (Beach)", "สวนสาธารณะ (Park)"],
+        correct: 2
     }
 ];
 
-// Animal characters for players (250 unique characters)
-const animalCharacters = [
-    '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🦁', '🐯', '🐸', '🐷', '🐮', '🐵',
-    '🦄', '🐴', '🦓', '🦌', '🐺', '🐗', '🐽', '🐄', '🐂', '🐃', '🐪', '🐫', '🦏', '🦛', '🐘',
-    '🦒', '🦘', '🐿️', '🦔', '🦇', '🐾', '🦮', '🐕‍🦺', '🐩', '🐈', '🐈‍⬛', '🦝', '🦨', '🦡', '🦦',
-    '🐙', '🦑', '🐠', '🐟', '🐡', '🦈', '🐳', '🐋', '🦭', '🐧', '🦞', '🦀', '🐚', '🪸', '🐌',
-    '🦐', '🦪', '🐢', '🐊', '🦕', '🦖', '🐲', '🐉', '🦎', '🐍', '🕸️', '🦂', '🕷️', '🦟', '🦠',
-    '🐦', '🦅', '🦆', '🦢', '🦉', '🐓', '🦃', '🦚', '🦜', '🐥', '🐤', '🐣', '🦩', '🕊️', '🦤',
-    '🪶', '🦋', '🐛', '🐝', '🐞', '🦗', '🕸️', '🦂', '🕷️', '🦟', '🦠', '🐜', '🪲', '🪳', '🦪'
-];
+// Character emojis for players
+const characters = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞', '🐜', '🦟', '🦗', '🕷', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🐃', '🐂', '🐄', '🐎', '🐖', '🐏', '🐑', '🦙', '🐐', '🦌', '🐕', '🐩', '🦮', '🐕‍🦺', '🐈', '🐈‍⬛', '🐓', '🦃', '🦚', '🦜', '🦢', '🦩', '🕊', '🐇', '🦝', '🦨', '🦡', '🦦', '🦥', '🐁', '🐀', '🐿', '🦔'];
 
-// Extend to 250 characters
-while (animalCharacters.length < 250) {
-    const baseAnimals = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🦁'];
-    animalCharacters.push(...baseAnimals.slice(0, Math.min(baseAnimals.length, 250 - animalCharacters.length)));
-}
+// Game state
+const rooms = new Map();
+let onlineUsers = 0;
 
 // Utility functions
 function generateRoomId() {
-    return 'WEDDING-GAME-' + Date.now().toString().slice(-8);
+    return 'room_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
 }
 
-function getUniqueAnimalCharacter(roomId) {
-    const room = gameRooms.get(roomId);
-    if (!room) return animalCharacters[0];
-    
-    const usedCharacters = room.players.map(player => player.character).filter(char => char);
-    const availableCharacters = animalCharacters.filter(char => !usedCharacters.includes(char));
-    
-    if (availableCharacters.length === 0) {
-        return animalCharacters[Math.floor(Math.random() * animalCharacters.length)];
-    }
-    
-    return availableCharacters[Math.floor(Math.random() * availableCharacters.length)];
+function getRandomCharacter() {
+    return characters[Math.floor(Math.random() * characters.length)];
 }
 
-function createGameRoom() {
-    // Only allow one active room
-    if (activeRoomId && gameRooms.has(activeRoomId)) {
-        const existingRoom = gameRooms.get(activeRoomId);
-        // If room is less than 2 hours old, reuse it
-        if (Date.now() - existingRoom.createdAt < 7200000) {
-            return activeRoomId;
-        }
-    }
-    
-    // Clear old rooms
-    gameRooms.clear();
-    
-    const roomId = generateRoomId();
-    activeRoomId = roomId;
-    
-    gameRooms.set(roomId, {
-        roomId: roomId,
-        createdAt: Date.now(),
-        players: [],
-        gameState: 'waiting',
-        gameStarted: false,
-        currentQuestion: 0,
-        questionStartTime: null,
-        hostSocketId: null,
-        isActive: true
-    });
-    
-    console.log('Created new game room:', roomId);
-    return roomId;
+function calculateScore(timeLeft, totalTime = QUESTION_TIME) {
+    // Base score for correct answer
+    const baseScore = 100;
+    // Time bonus (up to 50 points for answering quickly)
+    const timeBonus = Math.floor((timeLeft / totalTime) * 50);
+    return baseScore + timeBonus;
 }
-
-// Routes
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.post('/api/verify-admin', (req, res) => {
-    const { password } = req.body;
-    if (password === ADMIN_PASSWORD) {
-        const roomId = createGameRoom();
-        res.json({ success: true, roomId: roomId });
-    } else {
-        res.json({ success: false, message: 'Invalid password' });
-    }
-});
-
-app.get('/api/room/:roomId', (req, res) => {
-    const roomId = req.params.roomId;
-    const room = gameRooms.get(roomId);
-    
-    if (!room) {
-        return res.status(404).json({ error: 'Room not found' });
-    }
-    
-    res.json({
-        roomId: room.roomId,
-        playerCount: room.players.length,
-        gameState: room.gameState,
-        gameStarted: room.gameStarted,
-        currentQuestion: room.currentQuestion
-    });
-});
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
+    onlineUsers++;
     
+    // Broadcast online count to all users
+    io.emit('online-count', { count: onlineUsers });
+
     // Host authentication
-socket.on('host-authenticate', (data) => {
-    const { password } = data;
-    if (password === ADMIN_PASSWORD) {
-        const roomId = createGameRoom();
-        const room = gameRooms.get(roomId);
-        room.hostSocketId = socket.id;
+    socket.on('host-authenticate', (data) => {
+        console.log('Host authentication attempt:', data.password);
         
-        socket.join(roomId);
-        
-        // สร้าง URL สำหรับเกม - แก้ไขส่วนนี้
-        const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-        const host = socket.handshake.headers.host || 'localhost:3000';
-        const gameUrl = `${protocol}://${host}/?join=true&room=${roomId}`;
-        
-        socket.emit('host-authenticated', { 
-            roomId: roomId,
-            gameUrl: gameUrl
-        });
-        
-        console.log('Host authenticated for room:', roomId);
-        console.log('Game URL:', gameUrl);
-    } else {
-        socket.emit('host-auth-failed', { message: 'Invalid password' });
-    }
-});
-    
+        if (data.password === ADMIN_PASSWORD) {
+            const roomId = generateRoomId();
+            const gameUrl = `${process.env.GAME_URL || 'http://localhost:3000'}?join=true&room=${roomId}`;
+            
+            // Create new room
+            rooms.set(roomId, {
+                id: roomId,
+                hostId: socket.id,
+                players: [],
+                gameStarted: false,
+                currentQuestion: 0,
+                questionStartTime: null
+            });
+            
+            socket.join(roomId);
+            socket.emit('host-authenticated', { 
+                roomId: roomId,
+                gameUrl: gameUrl
+            });
+            
+            console.log('Host authenticated, room created:', roomId);
+        } else {
+            socket.emit('host-auth-failed', { message: 'Invalid password' });
+        }
+    });
+
     // Player registration
     socket.on('player-register', (data) => {
         const { roomId, name, table } = data;
-        const room = gameRooms.get(roomId);
+        const room = rooms.get(roomId);
         
         if (!room) {
-            socket.emit('registration-failed', { message: 'Room not found' });
+            socket.emit('registration-failed', { message: 'ห้องเล่นไม่พบ กรุณาสแกน QR Code ใหม่' });
+            return;
+        }
+        
+        if (room.gameStarted) {
+            socket.emit('registration-failed', { message: 'เกมเริ่มแล้ว ไม่สามารถเข้าร่วมได้' });
             return;
         }
         
         if (room.players.length >= MAX_PLAYERS) {
-            socket.emit('registration-failed', { message: 'Room is full' });
+            socket.emit('registration-failed', { message: 'ห้องเต็มแล้ว' });
             return;
         }
         
-        // Check for duplicate names
+        // Check if name already exists
         const existingPlayer = room.players.find(p => p.name.toLowerCase() === name.toLowerCase());
         if (existingPlayer) {
-            socket.emit('registration-failed', { message: 'Name already taken' });
+            socket.emit('registration-failed', { message: 'ชื่อนี้มีคนใช้แล้ว กรุณาใช้ชื่ออื่น' });
             return;
         }
         
         const player = {
-            id: 'player-' + Date.now() + '-' + Math.floor(Math.random() * 10000),
-            socketId: socket.id,
+            id: socket.id,
             name: name,
-            table: table || '',
-            character: getUniqueAnimalCharacter(roomId),
+            table: table,
+            character: getRandomCharacter(),
             score: 0,
             answers: [],
-            joinedAt: Date.now(),
-            roomId: roomId
+            joinTime: Date.now()
         };
         
         room.players.push(player);
@@ -227,312 +149,314 @@ socket.on('host-authenticate', (data) => {
         
         socket.emit('registration-success', { player: player });
         
-        // Notify all clients in room about new player
+        // Notify all players in room
         io.to(roomId).emit('player-joined', { 
             player: player, 
             totalPlayers: room.players.length 
         });
         
         // Notify host specifically
-        if (room.hostSocketId) {
-            io.to(room.hostSocketId).emit('host-player-joined', {
-                player: player,
-                totalPlayers: room.players.length
+        io.to(room.hostId).emit('host-player-joined', { 
+            player: player, 
+            totalPlayers: room.players.length 
+        });
+        
+        console.log(`Player ${name} joined room ${roomId}`);
+    });
+
+    // Get game state
+    socket.on('get-game-state', (data) => {
+        const room = rooms.get(data.roomId);
+        if (room) {
+            socket.emit('game-state', { 
+                players: room.players,
+                gameStarted: room.gameStarted,
+                currentQuestion: room.currentQuestion
             });
         }
-        
-        console.log('Player registered:', name, 'in room:', roomId, 'Total players:', room.players.length);
     });
-    
-    // Start game (Host only)
+
+    // Start game
     socket.on('start-game', (data) => {
-        const { roomId } = data;
-        const room = gameRooms.get(roomId);
-        
-        if (!room || room.hostSocketId !== socket.id) {
+        const room = rooms.get(data.roomId);
+        if (!room || room.hostId !== socket.id) {
             socket.emit('error', { message: 'Unauthorized' });
             return;
         }
         
         if (room.players.length === 0) {
-            socket.emit('error', { message: 'No players joined' });
+            socket.emit('error', { message: 'ไม่มีผู้เล่นในห้อง' });
             return;
         }
         
         room.gameStarted = true;
-        room.gameState = 'playing';
         room.currentQuestion = 0;
         room.questionStartTime = Date.now();
         
-        // Reset all player scores
-        room.players.forEach(player => {
-            player.score = 0;
-            player.answers = [];
-        });
+        const questionData = {
+            currentQuestion: room.currentQuestion,
+            question: questions[room.currentQuestion],
+            totalQuestions: questions.length
+        };
         
-        // Start first question
-        const question = questions[0];
-        io.to(roomId).emit('game-started', {
-            currentQuestion: 0,
-            question: question,
-            questionStartTime: room.questionStartTime,
-            timeLimit: QUESTION_TIME
-        });
+        // Send to players
+        io.to(data.roomId).emit('game-started', questionData);
         
-        // Host gets additional data
-        io.to(room.hostSocketId).emit('host-game-started', {
-            currentQuestion: 0,
-            question: question,
-            totalPlayers: room.players.length
-        });
+        // Send to host
+        io.to(room.hostId).emit('host-game-started', questionData);
         
-        console.log('Game started in room:', roomId, 'with', room.players.length, 'players');
+        console.log(`Game started in room ${data.roomId} with ${room.players.length} players`);
         
-        // Auto-advance to next question after time limit
+        // Auto advance to next question after time limit
         setTimeout(() => {
-            advanceToNextQuestion(roomId);
-        }, QUESTION_TIME * 1000 + 3000); // 10s + 3s for results
+            advanceToNextQuestion(data.roomId);
+        }, (QUESTION_TIME + 3) * 1000); // Extra 3 seconds for showing results
     });
-    
-    // Player answer submission
+
+    // Submit answer
     socket.on('submit-answer', (data) => {
         const { roomId, playerId, questionIndex, selectedAnswer, timeLeft } = data;
-        const room = gameRooms.get(roomId);
+        const room = rooms.get(roomId);
         
         if (!room || !room.gameStarted) {
             return;
         }
         
-        const player = room.players.find(p => p.id === playerId && p.socketId === socket.id);
+        const player = room.players.find(p => p.id === playerId);
         if (!player) {
             return;
         }
         
-        // Check if already answered this question
-        if (player.answers.length > questionIndex) {
+        // Check if player already answered this question
+        if (player.answers[questionIndex] !== undefined) {
             return;
         }
         
         const question = questions[questionIndex];
         const isCorrect = selectedAnswer === question.correct;
+        const correctAnswer = question.correct;
         
+        // Store answer
+        player.answers[questionIndex] = selectedAnswer;
+        
+        // Calculate and add score if correct
         if (isCorrect) {
-            player.score++;
+            const scoreEarned = calculateScore(timeLeft);
+            player.score += scoreEarned;
         }
-        
-        player.answers.push({
-            question: questionIndex,
-            selected: selectedAnswer,
-            correct: question.correct,
-            isCorrect: isCorrect,
-            timeLeft: timeLeft,
-            answeredAt: Date.now()
-        });
         
         // Send result to player
         socket.emit('answer-result', {
             isCorrect: isCorrect,
-            correctAnswer: question.correct,
-            score: player.score
+            correctAnswer: correctAnswer,
+            score: player.score,
+            scoreEarned: isCorrect ? calculateScore(timeLeft) : 0
         });
         
-        // Update host with real-time stats
-        if (room.hostSocketId) {
-            const answerStats = [0, 0, 0, 0];
-            let answeredCount = 0;
-            
-            room.players.forEach(p => {
-                if (p.answers.length > questionIndex) {
-                    const answer = p.answers[questionIndex];
-                    if (answer.selected >= 0 && answer.selected <= 3) {
-                        answerStats[answer.selected]++;
-                    }
-                    answeredCount++;
-                }
-            });
-            
-            io.to(room.hostSocketId).emit('host-answer-stats', {
-                questionIndex: questionIndex,
-                answerStats: answerStats,
-                answeredCount: answeredCount,
-                totalPlayers: room.players.length
-            });
-        }
+        // Send updated statistics to host
+        updateHostStatistics(roomId);
         
-        console.log('Answer submitted by', player.name, 'for question', questionIndex, 'Correct:', isCorrect);
+        console.log(`Player ${player.name} answered question ${questionIndex}: ${selectedAnswer} (correct: ${correctAnswer})`);
     });
-    
-    // Get game state
-    socket.on('get-game-state', (data) => {
-        const { roomId } = data;
-        const room = gameRooms.get(roomId);
-        
-        if (!room) {
-            socket.emit('error', { message: 'Room not found' });
-            return;
-        }
-        
-        socket.emit('game-state', {
-            roomId: room.roomId,
-            players: room.players.map(p => ({
-                id: p.id,
-                name: p.name,
-                table: p.table,
-                character: p.character,
-                score: p.score
-            })),
-            gameState: room.gameState,
-            gameStarted: room.gameStarted,
-            currentQuestion: room.currentQuestion,
-            questionStartTime: room.questionStartTime
-        });
-    });
-    
-    // End game (Host only)
+
+    // End game (host only)
     socket.on('end-game', (data) => {
-        const { roomId } = data;
-        const room = gameRooms.get(roomId);
-        
-        if (!room || room.hostSocketId !== socket.id) {
+        const room = rooms.get(data.roomId);
+        if (!room || room.hostId !== socket.id) {
             socket.emit('error', { message: 'Unauthorized' });
             return;
         }
         
-        room.gameState = 'finished';
-        
-        // Calculate final rankings
-        const activePlayers = room.players.filter(p => p.answers.length > 0);
-        activePlayers.sort((a, b) => {
-            if (b.score !== a.score) {
-                return b.score - a.score;
-            }
-            const aAvgTime = a.answers.reduce((sum, ans) => sum + (ans.timeLeft || 0), 0) / a.answers.length;
-            const bAvgTime = b.answers.reduce((sum, ans) => sum + (ans.timeLeft || 0), 0) / b.answers.length;
-            return bAvgTime - aAvgTime;
-        });
-        
-        io.to(roomId).emit('game-ended', {
-            leaderboard: activePlayers.slice(0, 10).map((player, index) => ({
-                rank: index + 1,
-                id: player.id,
-                name: player.name,
-                table: player.table,
-                character: player.character,
-                score: player.score,
-                totalQuestions: questions.length
-            }))
-        });
-        
-        console.log('Game ended in room:', roomId);
+        endGame(data.roomId);
     });
-    
+
+    // Host restart game
+    socket.on('host-restart-game', (data) => {
+        const room = rooms.get(data.roomId);
+        if (!room || room.hostId !== socket.id) {
+            socket.emit('error', { message: 'Unauthorized' });
+            return;
+        }
+        
+        // Clear all players from the room
+        room.players.forEach(player => {
+            const playerSocket = io.sockets.sockets.get(player.id);
+            if (playerSocket) {
+                playerSocket.leave(data.roomId);
+            }
+        });
+        
+        // Reset room state
+        room.players = [];
+        room.gameStarted = false;
+        room.currentQuestion = 0;
+        room.questionStartTime = null;
+        
+        // Notify all clients that players were cleared
+        io.to(data.roomId).emit('players-cleared', { 
+            message: 'All players cleared for new game' 
+        });
+        
+        console.log(`Host restarted game in room ${data.roomId}`);
+    });
+
     // Handle disconnection
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
+        onlineUsers--;
         
-        // Remove player from all rooms
-        gameRooms.forEach((room, roomId) => {
-            const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
+        // Remove player from any room
+        for (const [roomId, room] of rooms.entries()) {
+            const playerIndex = room.players.findIndex(p => p.id === socket.id);
             if (playerIndex !== -1) {
-                const player = room.players[playerIndex];
                 room.players.splice(playerIndex, 1);
-                
-                // Notify room about player leaving
-                io.to(roomId).emit('player-left', {
-                    playerId: player.id,
-                    playerName: player.name,
-                    totalPlayers: room.players.length
+                io.to(roomId).emit('player-left', { 
+                    totalPlayers: room.players.length 
                 });
-                
-                console.log('Player left:', player.name, 'from room:', roomId);
+                console.log(`Player left room ${roomId}`);
             }
             
-            // If host disconnected, mark room as inactive
-            if (room.hostSocketId === socket.id) {
-                room.hostSocketId = null;
-                console.log('Host disconnected from room:', roomId);
+            // If host disconnected, clean up room
+            if (room.hostId === socket.id) {
+                io.to(roomId).emit('host-disconnected', { 
+                    message: 'Host disconnected, game ended' 
+                });
+                rooms.delete(roomId);
+                console.log(`Room ${roomId} deleted - host disconnected`);
             }
-        });
+        }
+        
+        // Broadcast updated online count
+        io.emit('online-count', { count: onlineUsers });
     });
 });
 
-// Function to advance to next question
+// Helper functions
+function updateHostStatistics(roomId) {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    
+    const currentQuestion = room.currentQuestion;
+    const correctAnswer = questions[currentQuestion].correct;
+    
+    // Count answers for each option
+    let countA = 0, countB = 0, countC = 0, countD = 0;
+    let answeredPlayers = 0;
+    
+    room.players.forEach(player => {
+        if (player.answers[currentQuestion] !== undefined) {
+            answeredPlayers++;
+            switch (player.answers[currentQuestion]) {
+                case 0: countA++; break;
+                case 1: countB++; break;
+                case 2: countC++; break;
+                case 3: countD++; break;
+            }
+        }
+    });
+    
+    // Get list of players who answered correctly
+    const correctPlayers = room.players.filter(player => {
+        return player.answers && player.answers[currentQuestion] === correctAnswer;
+    }).map(player => ({
+        id: player.id,
+        name: player.name,
+        character: player.character,
+        table: player.table
+    }));
+    
+    // Send statistics to host with correct players list
+    io.to(room.hostId).emit('host-answer-stats', {
+        answerStats: [countA, countB, countC, countD],
+        answeredCount: answeredPlayers,
+        totalPlayers: room.players.length,
+        correctPlayers: correctPlayers
+    });
+}
+
 function advanceToNextQuestion(roomId) {
-    const room = gameRooms.get(roomId);
+    const room = rooms.get(roomId);
     if (!room || !room.gameStarted) return;
     
     room.currentQuestion++;
     
     if (room.currentQuestion >= questions.length) {
         // Game finished
-        room.gameState = 'finished';
-        
-        const activePlayers = room.players.filter(p => p.answers.length > 0);
-        activePlayers.sort((a, b) => {
-            if (b.score !== a.score) {
-                return b.score - a.score;
-            }
-            const aAvgTime = a.answers.reduce((sum, ans) => sum + (ans.timeLeft || 0), 0) / a.answers.length;
-            const bAvgTime = b.answers.reduce((sum, ans) => sum + (ans.timeLeft || 0), 0) / b.answers.length;
-            return bAvgTime - aAvgTime;
-        });
-        
-        io.to(roomId).emit('game-ended', {
-            leaderboard: activePlayers.slice(0, 10).map((player, index) => ({
-                rank: index + 1,
-                id: player.id,
-                name: player.name,
-                table: player.table,
-                character: player.character,
-                score: player.score,
-                totalQuestions: questions.length
-            }))
-        });
-        
-        console.log('Game automatically ended in room:', roomId);
+        endGame(roomId);
         return;
     }
     
-    // Next question
     room.questionStartTime = Date.now();
-    const question = questions[room.currentQuestion];
     
-    io.to(roomId).emit('next-question', {
+    const questionData = {
         currentQuestion: room.currentQuestion,
-        question: question,
-        questionStartTime: room.questionStartTime,
-        timeLimit: QUESTION_TIME
-    });
+        question: questions[room.currentQuestion],
+        totalQuestions: questions.length
+    };
     
-    // Host gets additional data
-    if (room.hostSocketId) {
-        io.to(room.hostSocketId).emit('host-next-question', {
-            currentQuestion: room.currentQuestion,
-            question: question
-        });
-    }
+    // Send to players
+    io.to(roomId).emit('next-question', questionData);
     
-    console.log('Advanced to question', room.currentQuestion + 1, 'in room:', roomId);
+    // Send to host
+    io.to(room.hostId).emit('host-next-question', questionData);
     
-    // Schedule next question
+    console.log(`Advanced to question ${room.currentQuestion + 1} in room ${roomId}`);
+    
+    // Auto advance to next question
     setTimeout(() => {
         advanceToNextQuestion(roomId);
-    }, QUESTION_TIME * 1000 + 3000);
+    }, (QUESTION_TIME + 3) * 1000);
 }
 
-// Clean up old rooms every hour
-setInterval(() => {
-    const now = Date.now();
-    gameRooms.forEach((room, roomId) => {
-        if (now - room.createdAt > 7200000) { // 2 hours
-            gameRooms.delete(roomId);
-            console.log('Cleaned up old room:', roomId);
+function endGame(roomId) {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    
+    // Calculate final rankings
+    const sortedPlayers = room.players
+        .filter(player => player.answers.length > 0) // Only players who answered at least one question
+        .sort((a, b) => {
+            if (b.score !== a.score) {
+                return b.score - a.score; // Sort by score descending
+            }
+            return a.joinTime - b.joinTime; // If tied, earlier joiner wins
+        });
+    
+    // Assign ranks
+    let currentRank = 1;
+    for (let i = 0; i < sortedPlayers.length; i++) {
+        if (i > 0 && sortedPlayers[i].score < sortedPlayers[i-1].score) {
+            currentRank = i + 1;
         }
+        sortedPlayers[i].rank = currentRank;
+        sortedPlayers[i].totalQuestions = questions.length;
+    }
+    
+    // Send results to all players
+    io.to(roomId).emit('game-ended', {
+        leaderboard: sortedPlayers
     });
-}, 3600000); // 1 hour
+    
+    console.log(`Game ended in room ${roomId}. Winner: ${sortedPlayers[0]?.name || 'None'}`);
+    
+    // Mark game as finished
+    room.gameStarted = false;
+}
 
+// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`🎉 Namkhing & Punch Wedding Quiz Server running on port ${PORT}`);
-    console.log(`🌐 Access the game at: http://localhost:${PORT}`);
+    console.log(`🎮 Wedding Game Server running on port ${PORT}`);
+    console.log(`🔐 Admin password: ${ADMIN_PASSWORD}`);
+    console.log(`👥 Max players per room: ${MAX_PLAYERS}`);
+    console.log(`⏱️  Question time: ${QUESTION_TIME} seconds`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+    });
 });
