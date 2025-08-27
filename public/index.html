@@ -425,8 +425,18 @@
                         <div class="text-sm text-green-600">ตัวเลือก D</div>
                     </div>
                 </div>
-                <div class="text-center">
+                <div class="text-center mb-6">
                     <p class="text-lg">ตอบแล้ว: <span id="answeredCount" class="font-bold text-purple-600">0</span> / <span id="totalPlayersCount">0</span> คน</p>
+                </div>
+                
+                <!-- ผู้เล่นที่ตอบถูก Real-time -->
+                <div class="bg-green-50 p-4 rounded-xl border-2 border-green-200">
+                    <h4 class="text-lg font-bold text-green-800 mb-3 text-center">🎯 ผู้เล่นที่ตอบถูกข้อนี้ (Correct Answers This Question)</h4>
+                    <div id="correctAnswersList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-32 overflow-y-auto">
+                        <div class="text-center text-gray-500 py-2">
+                            <span class="text-sm">รอผู้เล่นตอบ... (Waiting for answers...)</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -474,9 +484,14 @@
                 </div>
             </div>
 
-            <div class="text-center mt-8">
+            <div class="text-center mt-8 space-y-4">
                 <button onclick="restartGame()" class="bg-gradient-to-r from-pink-500 to-purple-500 text-white px-8 py-4 rounded-full text-xl font-semibold hover:from-pink-600 hover:to-purple-600 transform hover:scale-105 transition-all duration-300 shadow-lg">
                     เล่นใหม่ (Play Again) 🔄
+                </button>
+                
+                <!-- ปุ่มเริ่มเกมใหม่สำหรับ Host -->
+                <button id="hostRestartBtn" onclick="hostRestartGame()" class="bg-gradient-to-r from-green-500 to-blue-500 text-white px-8 py-4 rounded-full text-xl font-semibold hover:from-green-600 hover:to-blue-600 transform hover:scale-105 transition-all duration-300 shadow-lg" style="display: none;">
+                    🔄 เริ่มเกมใหม่ (Host: Start New Game)
                 </button>
             </div>
         </div>
@@ -596,6 +611,7 @@
             socket.on('host-answer-stats', (data) => {
                 if (isHost) {
                     updateAnswerStats(data);
+                    updateCorrectAnswersList(data.correctPlayers || []);
                 }
             });
             
@@ -609,6 +625,16 @@
                 players = data.players;
                 updatePlayersList();
                 updatePlayerCount(players.length);
+            });
+            
+            // Players cleared
+            socket.on('players-cleared', (data) => {
+                players = [];
+                updatePlayerCount(0);
+                updatePlayersList();
+                if (isHost) {
+                    showToast('🧹 ผู้เล่นทั้งหมดถูกเคลียร์แล้ว พร้อมเริ่มเกมใหม่!', 'success');
+                }
             });
             
             // Error handling
@@ -908,6 +934,16 @@
             // Show correct answer
             document.getElementById('hostCorrectText').textContent = data.question.answers[data.question.correct];
             
+            // Clear correct answers list for new question
+            const correctAnswersList = document.getElementById('correctAnswersList');
+            if (correctAnswersList) {
+                correctAnswersList.innerHTML = `
+                    <div class="text-center text-gray-500 py-2">
+                        <span class="text-sm">รอผู้เล่นตอบ... (Waiting for answers...)</span>
+                    </div>
+                `;
+            }
+            
             // Start host timer
             startHostTimer();
         }
@@ -935,8 +971,49 @@
             document.getElementById('totalPlayersCount').textContent = data.totalPlayers;
         }
 
+        function updateCorrectAnswersList(correctPlayers) {
+            const correctAnswersList = document.getElementById('correctAnswersList');
+            if (!correctAnswersList) return;
+            
+            correctAnswersList.innerHTML = '';
+            
+            if (correctPlayers.length === 0) {
+                correctAnswersList.innerHTML = `
+                    <div class="text-center text-gray-500 py-2 col-span-full">
+                        <span class="text-sm">ยังไม่มีผู้เล่นตอบถูก... (No correct answers yet...)</span>
+                    </div>
+                `;
+                return;
+            }
+            
+            correctPlayers.forEach((player) => {
+                const playerCard = document.createElement('div');
+                playerCard.className = 'bg-green-100 p-2 rounded-lg border border-green-300 text-center';
+                playerCard.innerHTML = `
+                    <div class="flex items-center justify-center">
+                        <span class="text-lg mr-1">${player.character}</span>
+                        <span class="text-xs font-semibold text-green-800">${player.name}</span>
+                    </div>
+                `;
+                correctAnswersList.appendChild(playerCard);
+            });
+        }
+
         function hostEndGame() {
             socket.emit('end-game', { roomId: roomId });
+        }
+
+        function hostRestartGame() {
+            if (!isHost) {
+                alert('เฉพาะ Host เท่านั้นที่สามารถเริ่มเกมใหม่ได้ (Only Host can restart the game)');
+                return;
+            }
+            
+            const confirmRestart = confirm('🔄 คุณต้องการเริ่มเกมใหม่หรือไม่?\n\n⚠️ การดำเนินการนี้จะ:\n• เคลียร์ผู้เล่นทั้งหมดออกจากห้อง\n• รีเซ็ตคะแนนทั้งหมด\n• สร้างห้องใหม่สำหรับเล่นเกม\n\n(Do you want to start a new game?\n\nThis action will:\n• Clear all players from the room\n• Reset all scores\n• Create a new room for the game)');
+            
+            if (confirmRestart) {
+                socket.emit('host-restart-game', { roomId: roomId });
+            }
         }
 
         // Results functions
@@ -946,8 +1023,10 @@
             
             if (isHost) {
                 document.getElementById('playerScoreSection').style.display = 'none';
+                document.getElementById('hostRestartBtn').style.display = 'block';
             } else {
                 document.getElementById('playerScoreSection').style.display = 'block';
+                document.getElementById('hostRestartBtn').style.display = 'none';
                 document.getElementById('finalScore').textContent = score;
                 
                 const playerRank = leaderboard.findIndex(p => p.id === currentPlayer.id) + 1;
@@ -1153,5 +1232,5 @@
             showHomeScreen();
         }
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'975d08c4f001d334',t:'MTc1NjMxMzA3My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'975d285c01a9d038',t:'MTc1NjMxNDM2Ny4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
