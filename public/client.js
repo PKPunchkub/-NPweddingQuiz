@@ -177,6 +177,7 @@ function hideAllScreens() {
 // Host functions
 function verifyPassword() {
     const password = document.getElementById('adminPassword').value;
+    console.log('Verifying password:', password); // เพิ่มบรรทัดนี้
     socket.emit('host-authenticate', { password: password });
 }
 
