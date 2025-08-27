@@ -162,24 +162,31 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
     
     // Host authentication
-    socket.on('host-authenticate', (data) => {
-        const { password } = data;
-        if (password === ADMIN_PASSWORD) {
-            const roomId = createGameRoom();
-            const room = gameRooms.get(roomId);
-            room.hostSocketId = socket.id;
-            
-            socket.join(roomId);
-            socket.emit('host-authenticated', { 
-                roomId: roomId,
-                gameUrl: `${req.protocol}://${req.get('host')}/?join=true&room=${roomId}`
-            });
-            
-            console.log('Host authenticated for room:', roomId);
-        } else {
-            socket.emit('host-auth-failed', { message: 'Invalid password' });
-        }
-    });
+socket.on('host-authenticate', (data) => {
+    const { password } = data;
+    if (password === ADMIN_PASSWORD) {
+        const roomId = createGameRoom();
+        const room = gameRooms.get(roomId);
+        room.hostSocketId = socket.id;
+        
+        socket.join(roomId);
+        
+        // สร้าง URL สำหรับเกม - แก้ไขส่วนนี้
+        const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+        const host = socket.handshake.headers.host || 'localhost:3000';
+        const gameUrl = `${protocol}://${host}/?join=true&room=${roomId}`;
+        
+        socket.emit('host-authenticated', { 
+            roomId: roomId,
+            gameUrl: gameUrl
+        });
+        
+        console.log('Host authenticated for room:', roomId);
+        console.log('Game URL:', gameUrl);
+    } else {
+        socket.emit('host-auth-failed', { message: 'Invalid password' });
+    }
+});
     
     // Player registration
     socket.on('player-register', (data) => {
