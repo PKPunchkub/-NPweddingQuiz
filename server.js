@@ -12,7 +12,7 @@ const io = socketIo(server);
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Game configuration
-const ADMIN_PASSWORD = 'namkhing2024';
+const ADMIN_PASSWORD = '689';
 const MAX_PLAYERS = 250;
 const QUESTION_TIME = 10; // seconds
 
