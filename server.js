@@ -1,4 +1,4 @@
-0const express = require('express');
+const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
@@ -67,7 +67,7 @@ function getRandomCharacter() {
 
 function calculateScore(timeLeft, totalTime = QUESTION_TIME) {
     // Base score for correct answer
-    const baseScore = 10;
+    const baseScore = 1;
     // Time bonus (up to 5 points for answering quickly)
     const timeBonus = Math.floor((timeLeft / totalTime) * 5);
     return baseScore + timeBonus;
